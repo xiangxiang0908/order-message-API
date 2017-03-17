@@ -1,0 +1,284 @@
+# -*- coding: utf-8 -*-
+import ssl
+
+import urllib2
+
+import xlrd
+
+import requests
+
+import json
+
+import xlwt
+
+from xlutils.copy import copy
+
+from openpyxl import Workbook
+
+import os.path
+
+import sys
+
+reload(sys)
+
+sys.setdefaultencoding('utf-8')
+
+#思路：1.打开excel表，获取指定sheet的内容 2.得到需要获取的内容（url，method） 3.根据method请求url获取response，转型为json后获取staus  4.判断status
+
+ssl._create_default_https_context = ssl._create_unverified_context
+
+#文件路径及文件名全局变量一下，后面直接可以调用全局变量
+FileName = "/Users/chenxiangxiang/Documents/api_automation.xls"
+
+#定义打开excel的方法（默认给参数）
+def excel_open(filename=FileName,sheet_index = 0):
+
+    file = xlrd.open_workbook(filename)
+
+    table = file.sheet_by_index(sheet_index)
+
+    return table,file
+
+    # print nrows,ncols
+
+#定义一个copy excel表的方法，方便后面写入excel的时候使用
+def excel_copy(source_file,sheet_index=0):
+
+    taget_file = copy(source_file)
+
+    sheet = taget_file.get_sheet(sheet_index)
+
+    return taget_file,sheet
+
+#定义一个获取excel表里面每列值的方法，后面会用到这些值（用一个列组，append方法放到list表中）
+def excel_check_value(work):
+
+    nrow = work.nrows
+
+    check_value = []
+
+    # 通过遍历的方式取多行固定列的内容
+    for n in range(1, nrow):
+
+        # rvalues = table.row_values(n)
+        #
+        # cvalues = table.col_values(n)
+
+        region = work.cell(n, 3).value
+
+        # print region
+
+        url = work.cell(n, 4).value
+
+        # print url
+
+        method = work.cell(n, 5).value
+
+        # print method
+
+        name = work.cell(n, 2).value
+
+        param = work.cell(n, 6).value
+
+        # print param
+
+        type = work.cell(n,8).value
+
+        # orignal = table.cell(n,6).value
+        #
+        # writing = work.cell(n, 7).value
+
+        check_value.append({'type':type,'name': name,'regional':region, 'url':url, 'method': method, 'param': param,'writing':[n,7]})
+
+        # print check_value
+
+    return  check_value
+
+#定义一个判断mehtod的方法
+def excel_url_method(item):
+
+    type0 = item.get("type")
+
+    method = item.get("method")
+
+    # print method
+
+    regional = item.get("regional")
+
+    # print regional
+
+    url0 = item.get("url")
+
+    # print url0
+
+    http = regional + url0
+
+    # print  http
+
+    if type0 == 'api':
+
+        try:
+
+            # 判断method类型，去得到对应的response状态码
+            if method == 'get':
+
+                response = requests.get(http)
+
+                # print  response
+
+                jsonresponse = json.loads(response.text)
+
+                # print jsonresponse
+
+                # print jsonresponse['original']['status']
+
+                # print jsonresponse_msg
+
+            else:
+
+                method == 'post'
+
+                # para = item.get("param")
+                #
+                # print para
+
+                # data = json.dumps(json.loads(item.get("param")))
+                #
+                # print data
+
+                response = requests.post(http , data=json.dumps(json.loads(item.get("param"))))
+
+                # print response
+
+                jsonresponse = json.loads(response.text)
+
+                # print jsonresponse['original']['status']
+
+        except Exception, e:
+
+            # print e, '异常'
+
+            return 'failed', str(e)+'异常'
+
+        try:
+
+            jsonresponse_msg = jsonresponse.get('original', {}).get('msg','')
+
+            return_info = jsonresponse['original']['status'],jsonresponse_msg
+
+        except Exception, e:
+
+            return 'failed', str(e) +'异常' + jsonresponse_msg
+        # print jsonresponse_msg
+
+        return return_info
+
+    else:
+
+        type0 == 'service'
+
+        # 判断method类型，去得到对应的response状态码
+        if method == 'get':
+
+            response = requests.get(http)
+
+            # print  response
+
+            jsonresponse = json.loads(response.text)
+
+            # print jsonresponse
+
+            # print jsonresponse['original']['status']
+
+            # print jsonresponse_msg
+
+        else:
+
+            method == 'post'
+
+            # para = item.get("param")
+            #
+            # print para
+
+            # data = json.dumps(json.loads(item.get("param")))
+            #
+            # print data
+
+            response = requests.post(http, data=json.dumps(item.get("param")))
+
+            # print response
+
+            jsonresponse = json.loads(response.text)
+
+            # print jsonresponse['original']['status']
+
+
+        try:
+
+            jsonresponse_msg = jsonresponse.get('original', {}).get('msg', '')
+
+            return_info = jsonresponse['status'], jsonresponse_msg
+
+        except Exception, e:
+
+            return 'failed', str(e) + '异常' + jsonresponse_msg
+            # print jsonresponse_msg
+
+        return return_info
+
+
+#主方法-两种写法（main()）
+if __name__ == "__main__":
+
+    sheet, source_file = excel_open()
+
+    check_value = excel_check_value(sheet)
+
+    # print check_value
+
+    taget_file,tage_sheet = excel_copy(source_file,sheet_index=0)
+
+
+    for line in check_value :
+
+        status,msg = excel_url_method(line)
+
+        type1 = line.get("type")
+
+        # print msg
+
+        try:
+
+            if type1 == 'api' :
+
+                content = u'接口通过' if status =='success'  else  (u'接口失败'+u'且'+'msg:'+msg)
+
+            else:
+
+                type1 == 'service'
+
+                content = u'接口通过' if status == 'true'  else  u'接口失败'
+
+            tage_sheet.write(line.get('writing')[0], line.get('writing')[1], content)
+
+            taget_file.save(FileName)
+
+        except Exception, e:
+
+            content = u'接口异常' + e
+
+                    # print line.get('writing')[0], "aaa", line.get('writing')[1], "aa",content
+
+
+
+
+#方法的定义、list表的传值、全局变量的使用、写入excel的方法、if语句的另一种写法、方法的调用
+
+
+
+
+
+
+
+
+
